@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Breadboard AR</title>
+<style>
+  :root{--bg:#0b0d14;--panel:#151a26;--panel2:#1c2333;--line:#2a334a;--fg:#e8ecf5;--dim:#8a93a8;--acc:#3ddc84;--warn:#ffb020}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none}
+  .screen{position:fixed;inset:0;display:none;flex-direction:column}
+  .screen.on{display:flex}
+  .top{display:flex;align-items:center;gap:6px;padding:7px 8px;background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto}
+  .top h1{font-size:16px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top h1 span{color:var(--acc)}
+  .btn{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;font-family:inherit}
+  .btn.acc{background:var(--acc);color:#04210f;border-color:var(--acc)}
+  .btn.warn{color:#ff8080}
+  .btn.sel{outline:2px solid var(--acc);outline-offset:-2px;color:var(--acc)}
+  .btn:disabled{opacity:.35}
+  .btn.big{font-size:18px;padding:0 18px;min-width:84px}
+  select,input,textarea{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:7px 9px;font-size:14px;font-family:inherit}
+  textarea{width:100%;min-height:70px;resize:vertical}
+  .scroll{flex:1;overflow:auto;padding:10px;-webkit-overflow-scrolling:touch}
+  .wrapper{max-width:760px;margin:0 auto}
+  .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .item{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:7px}
+  .item .meta{flex:1;min-width:0}.item .name{font-weight:600}.item .sub{font-size:12px;color:var(--dim)}
+  .sec{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin:14px 2px 6px}
+  .note{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;font-size:13px}
+  .note.ok{border-color:#1f6b40}.note.bad{border-color:#7a5a10}
+  .empty{color:var(--dim);font-size:13px;padding:10px 2px}
+  .stage{flex:1;position:relative;background:#000;overflow:hidden;min-height:0}
+  .stage canvas.main{position:absolute;touch-action:none}
+  .bar{display:flex;gap:6px;padding:7px 8px;background:var(--panel);border-top:1px solid var(--line);flex-wrap:wrap;flex:0 0 auto;align-items:center}
+  .loupe{position:absolute;top:8px;left:8px;width:150px;height:150px;border:2px solid var(--acc);border-radius:10px;display:none;background:#000;pointer-events:none}
+  .banner{position:absolute;left:8px;right:8px;bottom:8px;background:#000c;border-radius:10px;padding:8px 10px;font-size:14px;pointer-events:none}
+  .banner b{color:var(--acc)}
+  /* run */
+  .runtop{position:absolute;top:6px;right:6px;display:flex;gap:6px}
+  .runtop .btn{background:#000b}
+  .pill{position:absolute;top:8px;left:8px;background:#000b;border-radius:8px;padding:5px 9px;font-size:13px}
+  .runbar{display:flex;gap:8px;padding:8px;background:var(--panel);border-top:1px solid var(--line);flex:0 0 auto;min-height:84px}
+  .steptxt{flex:1;min-width:0}
+  #runNo{font-size:11px;color:var(--acc);letter-spacing:1px;text-transform:uppercase}
+  #runTitle{font-size:17px;font-weight:700;line-height:1.2}
+  #runText{font-size:13px;color:#cfd6e4;max-height:3.9em;overflow:auto}
+  /* editor */
+  .edmain{flex:1;display:grid;grid-template-columns:1fr;grid-template-rows:auto auto auto auto minmax(0,1fr);min-height:0}
+  .edmain .stage{aspect-ratio:2.9/1;max-height:58vh;width:100%}
+  .hintbar{padding:5px 9px;font-size:13px;background:#0e121b;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  @media (min-width:1000px) and (min-height:600px){.edmain{grid-template-columns:1fr 330px;grid-template-rows:auto auto auto auto 1fr}.steps{grid-column:2;grid-row:1/6}}
+  .tools{display:flex;gap:5px;padding:6px 8px;overflow-x:auto;background:var(--panel);border-top:1px solid var(--line)}
+  .tools .btn{padding:7px 9px;font-size:13px}
+  .toolopts{display:flex;gap:6px;padding:6px 8px;background:var(--panel);align-items:center;flex-wrap:wrap;font-size:13px;color:var(--dim)}
+  .toolopts:empty{display:none}
+  .steps{overflow:auto;padding:6px 8px;background:var(--bg);border-left:1px solid var(--line)}
+  @media (max-height:600px){.edmain .stage{max-height:50vh}.steps{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;align-items:center;border-left:0}.stp{flex:0 0 auto;max-width:240px;margin:0}}
+  .stp{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:5px;background:var(--panel);font-size:13px;cursor:pointer}
+  .stp.cur{border-color:var(--acc)}
+  .stp .n{color:var(--acc);font-weight:700;min-width:20px}
+  .stp .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bands{display:inline-flex;gap:2px;vertical-align:middle;padding:2px 4px;background:#d9c08c;border-radius:6px}
+  .bands i{width:7px;height:16px;display:block}
+  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50;padding:12px}
+  .modal.on{display:flex}
+  .mbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;width:100%;max-width:520px;display:flex;flex-direction:column;gap:8px}
+  .mbox input{width:100%}
+  #toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:#222c;border:1px solid var(--line);padding:8px 14px;border-radius:10px;z-index:99;display:none;font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- ============ HOME ============ -->
+<section id="home" class="screen on">
+  <div class="top"><h1>Breadboard <span>AR</span></h1><button class="btn" id="calBtn">📷 Camera setup</button></div>
+  <div class="scroll"><div class="wrapper">
+    <div id="calStatus" class="note"></div>
+    <div class="row"><button class="btn acc" id="newBtn">+ New circuit</button><button class="btn" id="impBtn">⬆ Import</button><button class="btn" id="expBtn">⬇ Export my circuits</button></div>
+    <div class="sec">Shared library</div><div id="sharedList"></div>
+    <div class="sec">My circuits (saved on this device)</div><div id="myList"></div>
+    <p class="empty">Keys: → / Space / Enter = next step, ← = back, Esc = exit. A USB keyboard or a GPIO button mapped to a key works as a NEXT button.</p>
+  </div></div>
+  <input type="file" id="impFile" accept=".json,application/json" hidden>
+</section>
+
+<!-- ============ CAMERA SETUP / CALIBRATION ============ -->
+<section id="cal" class="screen">
+  <div class="top"><button class="btn" id="calExit">✕</button><h1 id="calTitle">Camera setup</h1><button class="btn acc" id="calSave" disabled>Save</button></div>
+  <div class="stage" id="calStage"><canvas class="main" id="calCv"></canvas><canvas class="loupe" id="loupe" width="300" height="300"></canvas><div class="banner" id="calMsg"></div></div>
+  <div class="bar">
+    <select id="camSel"></select>
+    <button class="btn" id="rotBtn">⟳ Rotate</button>
+    <button class="btn" id="mirBtn">⇋ Mirror</button>
+    <select id="calBoard"><option value="full">Full board (63 cols)</option><option value="half">Half board (30 cols)</option></select>
+    <select id="calRed"><option value="out">Red (+) line: outer row</option><option value="in">Red (+) line: inner row</option></select>
+    <button class="btn" id="calRestart">↺ Re-tap</button>
+  </div>
+</section>
+
+<!-- ============ RUN ============ -->
+<section id="run" class="screen">
+  <div class="stage" id="runStage"><canvas class="main" id="runCv"></canvas>
+    <span class="pill" id="runName"></span>
+    <div class="runtop"><button class="btn" id="runGrid">▦ Grid</button><button class="btn" id="runExit">✕</button></div>
+  </div>
+  <div class="runbar">
+    <button class="btn big" id="runBack">◀</button>
+    <div class="steptxt"><div id="runNo"></div><div id="runTitle"></div><div id="runText"></div></div>
+    <button class="btn acc big" id="runNext">Next ▶</button>
+  </div>
+</section>
+
+<!-- ============ EDITOR ============ -->
+<section id="edit" class="screen">
+  <div class="top">
+    <button class="btn" id="edExit">✕</button>
+    <input id="edName" placeholder="Circuit name" style="flex:1;min-width:80px">
+    <select id="edBoard"><option value="full">Full</option><option value="half">Half</option></select>
+    <button class="btn" id="edInfo">ℹ</button>
+    <button class="btn" id="edTry">▶ Try</button>
+    <button class="btn acc" id="edSave">Save</button>
+  </div>
+  <div class="edmain">
+    <div class="stage" id="edStage" style="background:#10141e"><canvas class="main" id="edCv"></canvas></div>
+    <div class="hintbar" id="edHint"></div>
+    <div class="tools" id="tools"></div>
+    <div class="toolopts" id="toolOpts"></div>
+    <div class="steps" id="edSteps"></div>
+  </div>
+</section>
+
+<div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+<div id="toast"></div>
+<video id="video" playsinline muted style="display:none"></video>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('Could not save: ' + e.message); } },
+};
+let toastT;
+function toast(msg, ms = 2600) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', ms); }
+function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const uid = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+/* =====================================================================
+   BOARD MODEL — "plane" coordinates in hole pitches (2.54 mm).
+   u = column index (col 1 → u 0). v: row j = 0 … row f = 4, centre gap,
+   row e = 7 … row a = 11. Power rails sit above j (v<0) and below a (v>11).
+   Rail holes are numbered 1..n along each rail, in groups of 5 with a gap.
+   ===================================================================== */
+const ROWV = { j: 0, i: 1, h: 2, g: 3, f: 4, e: 7, d: 8, c: 9, b: 10, a: 11 };
+const BOARDS = { full: { cols: 63, rail: 50, name: 'Full (830)' }, half: { cols: 30, rail: 25, name: 'Half (400)' } };
+function defaultGeo(board, red = 'out') {
+  const B = BOARDS[board], span = (B.rail - 1) + Math.floor((B.rail - 1) / 5), u0 = ((B.cols - 1) - span) / 2;
+  return { board, red, uT: u0, uB: u0, g: 1, vT: -3.4, vB: 14.4 };
+}
+function parseHole(id) {
+  let m = /^([TB])([+-])(\d+)$/.exec(id);
+  if (m) return { rail: true, top: m[1] === 'T', plus: m[2] === '+', i: +m[3] };
+  m = /^([a-j])(\d+)$/.exec(id);
+  if (m) return { rail: false, row: m[1], col: +m[2] };
+  return null;
+}
+function holeUV(id, G) {
+  const h = parseHole(id);
+  if (h.rail) {
+    const outer = h.plus === (G.red === 'out'), i = h.i - 1;
+    const u = (h.top ? G.uT : G.uB) + i + G.g * Math.floor(i / 5);
+    const v = h.top ? (outer ? G.vT : G.vT + 1) : (outer ? G.vB : G.vB - 1);
+    return [u, v];
+  }
+  return [h.col - 1, ROWV[h.row]];
+}
+function validHole(id, board) {
+  const h = parseHole(id), B = BOARDS[board];
+  if (!h) return false;
+  return h.rail ? h.i >= 1 && h.i <= B.rail : h.col >= 1 && h.col <= B.cols;
+}
+function allHoles(board) {
+  const B = BOARDS[board], out = [];
+  for (let c = 1; c <= B.cols; c++) for (const r of 'abcdefghij') out.push(r + c);
+  for (const s of ['T+', 'T-', 'B+', 'B-']) for (let i = 1; i <= B.rail; i++) out.push(s + i);
+  return out;
+}
+const holeName = id => { const h = parseHole(id); return h && h.rail ? `${h.top ? 'top' : 'bottom'} ${h.plus ? '+' : '−'} rail #${h.i}` : id; };
+const holeShort = id => { const h = parseHole(id); return h && h.rail ? `${h.plus ? '+' : '−'} rail` : id; };
+
+/* ================= homography ================= */
+function solve(A, b) {
+  const n = b.length, M = A.map((r, i) => [...r, b[i]]);
+  for (let c = 0; c < n; c++) {
+    let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    [M[c], M[p]] = [M[p], M[c]];
+    for (let r = 0; r < n; r++) if (r !== c) { const f = M[r][c] / M[c][c]; for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; }
+  }
+  return M.map((r, i) => r[n] / r[i]);
+}
+function homography(src, dst) {
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = src[i], [X, Y] = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -X * x, -X * y]); b.push(X);
+    A.push([0, 0, 0, x, y, 1, -Y * x, -Y * y]); b.push(Y);
+  }
+  return [...solve(A, b), 1];
+}
+const applyH = (H, u, v) => { const w = H[6] * u + H[7] * v + H[8]; return [(H[0] * u + H[1] * v + H[2]) / w, (H[3] * u + H[4] * v + H[5]) / w]; };
+function inv3(m) {
+  const [a, b, c, d, e, f, g, h, i] = m, A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g, det = a * A + b * B + c * C;
+  return [A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d].map(x => x / det);
+}
+function mapper(H) {
+  const m = (u, v) => applyH(H, u, v);
+  m.k = (u, v) => { const a = m(u, v), b = m(u + 1, v), c = m(u, v + 1); return (Math.hypot(b[0] - a[0], b[1] - a[1]) + Math.hypot(c[0] - a[0], c[1] - a[1])) / 2; };
+  return m;
+}
+
+/* ================= electronics helpers ================= */
+const WIRE = { red: '#e02424', black: '#1c1c1c', yellow: '#f2c200', green: '#1fae3a', blue: '#2a6bff', orange: '#ff7a00', white: '#f2f2f2', purple: '#9b4dff' };
+const LEDC = { red: '#ff2a2a', yellow: '#ffd21a', green: '#2aff5a', blue: '#2a7bff', white: '#f4f8ff', orange: '#ff8a1a' };
+const BAND = [['black', '#111'], ['brown', '#6b3a1e'], ['red', '#d01818'], ['orange', '#ff7a00'], ['yellow', '#f5d000'], ['green', '#1a9a2a'], ['blue', '#1f4fd8'], ['violet', '#8a2be2'], ['grey', '#888'], ['white', '#f2f2f2']];
+const GOLD = ['gold', '#c9a227'], SILVER = ['silver', '#c0c0c0'];
+function bands(o) {
+  let e = Math.floor(Math.log10(o)) - 1, d = Math.round(o / 10 ** e);
+  if (d >= 100) { d = Math.round(d / 10); e++; }
+  return [BAND[Math.floor(d / 10)], BAND[d % 10], e === -1 ? GOLD : e === -2 ? SILVER : BAND[e], GOLD];
+}
+const bandNames = o => bands(o).map(b => b[0]).join('-');
+const fmtR = o => o >= 1e6 ? `${+(o / 1e6).toFixed(2)} MΩ` : o >= 1000 ? `${+(o / 1000).toFixed(2)} kΩ` : `${+o.toFixed(2)} Ω`;
+function parseR(s) {
+  const m = /^\s*([\d.]+)\s*([rkmRKM]?)\s*([\d]*)\s*(Ω|ohm)?\s*$/.exec(String(s));
+  if (!m) return NaN;
+  let v = parseFloat(m[1] + (m[3] ? '.' + m[3] : ''));
+  const u = m[2].toLowerCase(); if (u === 'k') v *= 1e3; if (u === 'm') v *= 1e6;
+  return v > 0 && v < 1e9 ? v : NaN;
+}
+const cap1 = s => s ? s[0].toUpperCase() + s.slice(1) : s;
+const bandHTML = o => `<span class="bands">${bands(o).map(b => `<i style="background:${b[1]}"></i>`).join('')}</span>`;
+
+/* ================= parts ================= */
+function partHoles(p) {
+  switch (p.k) {
+    case 'wire': case 'res': case 'led': case 'diode': case 'cap': return [p.a, p.b];
+    case 'lead': return [p.to];
+    case 'probe': return [p.at];
+    case 'btn': { const c = parseHole(p.at).col; return [`e${c}`, `e${c + 2}`, `f${c}`, `f${c + 2}`]; }
+    case 'ic': { const c = parseHole(p.at).col, h = p.pins / 2, o = []; for (let i = 0; i < h; i++) o.push(`e${c + i}`); for (let i = h - 1; i >= 0; i--) o.push(`f${c + i}`); return o; }
+  }
+  return [];
+}
+function autoStep(p) {
+  const A = holeName(p.a || ''), B = holeName(p.b || '');
+  switch (p.k) {
+    case 'wire': return { title: `${cap1(p.color)} jumper: ${A} → ${B}`, text: '' };
+    case 'res': return { title: `${fmtR(p.ohms)} resistor: ${A} → ${B}`, text: `Bands: <b>${bandNames(p.ohms)}</b>. Resistors aren't polarised, so either way round is fine.` };
+    case 'led': return { title: `${cap1(p.color)} LED: + in ${A}, − in ${B}`, text: `<b>Long leg</b> (anode, +) into ${A}. <b>Short leg / flat edge</b> (cathode, −) into ${B}.` };
+    case 'diode': return { title: `Diode: ${A} → ${B}`, text: `The <b>stripe</b> (cathode) end goes into ${B}.` };
+    case 'cap': return p.pol
+      ? { title: `${p.label} capacitor: + in ${A}, − in ${B}`, text: `Electrolytic: the <b>stripe</b> marks the − leg, which goes into ${B}. Longer leg is +.` }
+      : { title: `${p.label} capacitor: ${A} ↔ ${B}`, text: `Ceramic capacitors aren't polarised.` };
+    case 'btn': { const c = parseHole(p.at).col; return { title: `Push button across the gap at column ${c}`, text: `Legs in <b>e${c}, e${c + 2}, f${c}, f${c + 2}</b>. If it acts "always on", rotate it 90°.` }; }
+    case 'ic': return { title: `${p.label} chip: pin 1 in ${p.at}`, text: `Straddle the centre gap. <b>Notch / dot to the left</b>, so pin 1 is bottom-left in ${p.at}. Press down evenly.` };
+    case 'lead': return { title: `Supply ${p.label} → ${holeName(p.to)}`, text: `Connect the supply lead. Leave the power <b>off</b> until told.` };
+    case 'probe': return { title: `Probe (${p.label}) on ${holeName(p.at)}`, text: `` };
+  }
+  return { title: 'Step', text: '' };
+}
+
+/* ================= drawing (screen space, scaled by local hole pitch k) ================= */
+function tag(ctx, x, y, text, { fg = '#fff', bg = 'rgba(8,12,20,.9)', size = 13, align = 'center' } = {}) {
+  const uis = ctx.canvas._uis || 1; size = Math.max(12 * uis, Math.min(size, 19 * uis));
+  ctx.save(); ctx.font = `700 ${size}px system-ui,sans-serif`; ctx.textBaseline = 'middle';
+  const w = ctx.measureText(text).width + size, h = size * 1.6;
+  const x0 = align === 'center' ? x - w / 2 : align === 'left' ? x : x - w;
+  ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(x0, y - h / 2, w, h, h / 2); ctx.fill();
+  ctx.fillStyle = fg; ctx.textAlign = 'left'; ctx.fillText(text, x0 + size / 2, y + 1); ctx.restore();
+}
+function line(ctx, pts, w, col, outline = true) {
+  w = Math.max(w, 1.6 * (ctx.canvas._uis || 1));
+  ctx.save(); ctx.lineCap = ctx.lineJoin = 'round';
+  const path = () => { ctx.beginPath(); ctx.moveTo(...pts[0]); if (pts.length === 3) ctx.quadraticCurveTo(...pts[1], ...pts[2]); else pts.slice(1).forEach(p => ctx.lineTo(...p)); };
+  if (outline) { path(); ctx.strokeStyle = 'rgba(0,0,0,.65)'; ctx.lineWidth = w * 1.45; ctx.stroke(); }
+  path(); ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); ctx.restore();
+}
+function dot(ctx, x, y, r, fill, stroke) { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = Math.max(1, r * .3); ctx.stroke(); } }
+function poly(ctx, pts, fill, stroke, lw = 1.5) { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); } }
+
+// two-lead body along A→B, drawn in a rotated frame centred between the holes
+function body2(ctx, A, B, k, draw) {
+  line(ctx, [A, B], Math.max(1.5, k * .13), '#cfcfcf');
+  const L = Math.hypot(B[0] - A[0], B[1] - A[1]);
+  ctx.save(); ctx.translate((A[0] + B[0]) / 2, (A[1] + B[1]) / 2); ctx.rotate(Math.atan2(B[1] - A[1], B[0] - A[0]));
+  draw(L); ctx.restore();
+}
+function drawPart(ctx, m, G, p, st) {
+  const P = id => m(...holeUV(id, G)), K = id => m.k(...holeUV(id, G));
+  const fs = k => k * .75;
+  ctx.save(); ctx.globalAlpha = st.alpha;
+  switch (p.k) {
+    case 'wire': {
+      const A = P(p.a), B = P(p.b), k = K(p.a), dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy) || 1;
+      const bulge = Math.min(L * .12, k * 1.6), mid = [(A[0] + B[0]) / 2 - dy / L * bulge, (A[1] + B[1]) / 2 + dx / L * bulge];
+      line(ctx, [A, mid, B], Math.max(3, k * .32), WIRE[p.color] || p.color);
+      dot(ctx, ...A, k * .17, '#ddd'); dot(ctx, ...B, k * .17, '#ddd');
+      break;
+    }
+    case 'res': case 'diode': {
+      const A = P(p.a), B = P(p.b), k = K(p.a);
+      body2(ctx, A, B, k, L => {
+        const bl = Math.min(L * .62, k * 2.6), bw = k * (p.k === 'res' ? .78 : .6);
+        ctx.fillStyle = p.k === 'res' ? '#d9c08c' : '#1b1b1b'; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(-bl / 2, -bw / 2, bl, bw, bw / 2); ctx.fill(); ctx.stroke();
+        if (p.k === 'res') bands(p.ohms).forEach((b, i) => { ctx.fillStyle = b[1]; const x = [-.3, -.16, -.02, .3][i] * bl; ctx.fillRect(x - bl * .045, -bw / 2, bl * .09, bw); });
+        else { ctx.fillStyle = '#ddd'; ctx.fillRect(bl * .26, -bw / 2, bl * .1, bw); }
+      });
+      const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+      if (st.labels) tag(ctx, M[0], M[1] - k * 1.15, p.k === 'res' ? fmtR(p.ohms) : 'stripe →', { size: fs(k) });
+      break;
+    }
+    case 'led': {
+      const A = P(p.a), B = P(p.b), k = K(p.a), col = LEDC[p.color] || '#f22', M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+      line(ctx, [A, M, B], Math.max(1.5, k * .13), '#cfcfcf');
+      if (st.lit) { const g = ctx.createRadialGradient(...M, 0, ...M, k * 3.2); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = st.alpha * (.75 + .25 * Math.sin(st.t * 9)); ctx.fillStyle = g; ctx.fillRect(M[0] - k * 3.2, M[1] - k * 3.2, k * 6.4, k * 6.4); ctx.globalAlpha = st.alpha; }
+      ctx.globalAlpha = st.alpha * (st.lit ? 1 : .72);
+      dot(ctx, ...M, k * .82, col, 'rgba(0,0,0,.7)');
+      ctx.globalAlpha = st.alpha;
+      break;
+    }
+    case 'cap': {
+      const A = P(p.a), B = P(p.b), k = K(p.a), M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+      line(ctx, [A, M, B], Math.max(1.5, k * .13), '#cfcfcf');
+      if (p.pol) {
+        ctx.globalAlpha = st.alpha * .8; dot(ctx, ...M, k * .95, '#1f3f8a', 'rgba(0,0,0,.7)');
+        const ang = Math.atan2(B[1] - A[1], B[0] - A[0]);
+        ctx.beginPath(); ctx.arc(...M, k * .95, ang - .6, ang + .6); ctx.lineTo(...M); ctx.closePath(); ctx.fillStyle = '#c8d4f0'; ctx.fill();
+        ctx.globalAlpha = st.alpha;
+      } else { ctx.globalAlpha = st.alpha * .8; dot(ctx, ...M, k * .6, '#e8a33d', 'rgba(0,0,0,.7)'); ctx.globalAlpha = st.alpha; }
+      if (st.labels) tag(ctx, M[0], M[1] - k * 1.5, p.label + (p.pol ? '  (+ / −)' : ''), { size: fs(k) });
+      break;
+    }
+    case 'btn': {
+      const c = parseHole(p.at).col - 1, k = K(p.at);
+      const corners = [[c - .25, 4.35], [c + 2.25, 4.35], [c + 2.25, 6.65], [c - .25, 6.65]].map(q => m(...q));
+      partHoles(p).forEach(h => { const H = P(h), uv = holeUV(h, G); line(ctx, [H, m(uv[0], uv[1] < 5 ? 4.4 : 6.6)], Math.max(2, k * .18), '#cfcfcf', false); });
+      ctx.globalAlpha = st.alpha * .85; poly(ctx, corners, '#262626', 'rgba(0,0,0,.8)'); ctx.globalAlpha = st.alpha;
+      const C = m(c + 1, 5.5); dot(ctx, ...C, k * (st.pressed ? .55 : .7), st.pressed ? '#555' : '#3a3a3a', '#111');
+      break;
+    }
+    case 'ic': {
+      const c = parseHole(p.at).col - 1, h = p.pins / 2, k = K(p.at);
+      for (let i = 0; i < h; i++) { line(ctx, [m(c + i, 7), m(c + i, 6.55)], Math.max(2, k * .3), '#cfcfcf', false); line(ctx, [m(c + i, 4), m(c + i, 4.45)], Math.max(2, k * .3), '#cfcfcf', false); }
+      const corners = [[c - .45, 4.4], [c + h - .55, 4.4], [c + h - .55, 6.6], [c - .45, 6.6]].map(q => m(...q));
+      ctx.globalAlpha = st.alpha * .9; poly(ctx, corners, '#1b1b1b', '#000'); ctx.globalAlpha = st.alpha;
+      const N = m(c - .45, 5.5); ctx.beginPath(); ctx.arc(...N, k * .35, -Math.PI / 2, Math.PI / 2); ctx.fillStyle = '#555'; ctx.fill();
+      dot(ctx, ...m(c, 6.2), k * .16, '#888');
+      if (st.labels) tag(ctx, ...m(c + (h - 1) / 2, 5.5), p.label, { size: fs(k), bg: 'rgba(0,0,0,0)' });
+      break;
+    }
+    case 'lead': {
+      const uv = holeUV(p.to, G), top = parseHole(p.to).top, S = m(uv[0], top ? G.vT - 3.2 : G.vB + 3.2), A = P(p.to), k = K(p.to);
+      line(ctx, [S, A], Math.max(3, k * .38), WIRE[p.color] || p.color);
+      dot(ctx, ...A, k * .17, '#ddd'); dot(ctx, ...S, k * .55, WIRE[p.color] || p.color, '#000');
+      if (st.labels) tag(ctx, S[0], S[1] + (top ? -1 : 1) * k * 1.3, p.label, { fg: p.color === 'red' ? '#ff9a9a' : '#d6dcea', size: fs(k) });
+      break;
+    }
+    case 'probe': {
+      const A = P(p.at), k = K(p.at), S = [A[0] - k * 2.2, A[1] - k * 2.6];
+      line(ctx, [S, A], Math.max(2, k * .16), '#d8d8d8');
+      dot(ctx, ...S, k * .55, WIRE[p.color] || p.color, '#000');
+      if (st.labels) tag(ctx, S[0], S[1] - k * 1.2, p.label, { fg: p.color === 'red' ? '#ff9a9a' : '#d6dcea', size: fs(k) });
+      break;
+    }
+  }
+  ctx.restore();
+}
+function drawTargets(ctx, m, G, p, t, color = '#3ddc84') {
+  const hs = partHoles(p), pulse = .5 + .5 * Math.sin(t * 6);
+  hs.forEach((h, i) => {
+    const [u, v] = holeUV(h, G), A = m(u, v), k = m.k(u, v);
+    ctx.save();
+    dot(ctx, ...A, k * .5 + pulse * k * .12, null, 'rgba(0,0,0,.7)'); ctx.lineWidth = Math.max(2.5, k * .16);
+    ctx.beginPath(); ctx.arc(...A, k * .5 + pulse * k * .12, 0, 7); ctx.strokeStyle = color; ctx.lineWidth = Math.max(2, k * .13); ctx.stroke();
+    dot(ctx, ...A, Math.max(1.5, k * .1), color);
+    ctx.restore();
+    const show = p.k === 'ic' ? i === 0 : true;
+    if (show) {
+      const pol = (p.k === 'led' || (p.k === 'cap' && p.pol)) ? (i === 0 ? '+ ' : '− ') : p.k === 'diode' && i === 1 ? 'stripe ' : '';
+      const txt = p.k === 'ic' ? `pin 1 · ${h}` : pol + holeShort(h), up = (hs.length === 2 ? i === 0 : v < 5.5) ? -1 : 1;
+      const uis = ctx.canvas._uis || 1, off = Math.max(k * (hs.length === 2 ? 1.25 : 1.1) * (['led', 'res', 'diode', 'cap'].includes(p.k) ? 1.9 : 1), 16 * uis);
+      tag(ctx, A[0], A[1] + up * off, txt, { fg: color, size: k * .72 });
+    }
+  });
+}
+function drawGrid(ctx, m, G) {
+  for (const id of allHoles(G.board)) {
+    const [u, v] = holeUV(id, G), A = m(u, v), k = m.k(u, v), h = parseHole(id);
+    dot(ctx, ...A, Math.max(1.3, k * .14), h.rail ? (h.plus ? '#ff4d4d' : '#4d8dff') : 'rgba(255,255,255,.85)', 'rgba(0,0,0,.6)');
+  }
+}
+function drawBoardDiagram(ctx, m, G, occupied = new Set()) {
+  const B = BOARDS[G.board], N = B.cols, k = m.k(0, 5);
+  poly(ctx, [[-1.4, G.vT - 1.3], [N - 1 + 1.4, G.vT - 1.3], [N - 1 + 1.4, G.vB + 1.3], [-1.4, G.vB + 1.3]].map(q => m(...q)), '#f1ede2', '#bdb6a3');
+  poly(ctx, [[-1.4, 4.75], [N - 1 + 1.4, 4.75], [N - 1 + 1.4, 6.25], [-1.4, 6.25]].map(q => m(...q)), '#e0dacb');
+  for (const top of [true, false]) for (const plus of [true, false]) {
+    const outer = plus === (G.red === 'out'), v = top ? (outer ? G.vT - .7 : G.vT + 1.7) : (outer ? G.vB + .7 : G.vB - 1.7);
+    line(ctx, [m(-.8, v), m(N - 1 + .8, v)], Math.max(1.5, k * .1), plus ? '#e02424' : '#2a6bff', false);
+  }
+  for (const id of allHoles(G.board)) {
+    const [u, v] = holeUV(id, G), A = m(u, v), s = k * .42;
+    ctx.fillStyle = occupied.has(id) ? '#8a8a8a' : '#4a463c'; ctx.fillRect(A[0] - s / 2, A[1] - s / 2, s, s);
+  }
+  ctx.save(); ctx.fillStyle = '#6b6555'; ctx.font = `600 ${Math.max(8, k * .55)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const r in ROWV) { ctx.fillText(r, ...m(-1, ROWV[r])); ctx.fillText(r, ...m(N, ROWV[r])); }
+  for (let c = 1; c <= N; c++) if (c === 1 || c % 5 === 0) ctx.fillText(c, ...m(c - 1, 5.5));
+  ctx.restore();
+}
+function litState(steps, cur, t) {
+  let p = null; for (let i = 0; i <= cur && i < steps.length; i++) if (steps[i].power !== undefined && steps[i].power !== '') p = steps[i].power === 'off' ? null : steps[i].power;
+  const pressed = p === 'press' && (t % 2) < 1.1;
+  return { lit: p === 'on' || pressed, pressed };
+}
+// Render a circuit: previous steps dimmed, current step bright with pulsing hole targets.
+function renderCircuit(ctx, m, G, steps, cur, t, { allFuture = false } = {}) {
+  const { lit, pressed } = litState(steps, cur, t);
+  steps.forEach((s, i) => {
+    if (i > cur && !allFuture) return;
+    const isCur = i === cur;
+    s.parts.forEach(p => drawPart(ctx, m, G, p, { alpha: isCur ? 1 : i < cur ? .6 : .18, labels: isCur, lit, pressed, t }));
+  });
+  if (steps[cur]) steps[cur].parts.forEach(p => drawTargets(ctx, m, G, p, t));
+}
+
+/* ================= camera ================= */
+const video = $('video');
+let stream = null;
+async function startCamera(deviceId) {
+  stopCamera();
+  const v = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  if (deviceId) v.deviceId = { exact: deviceId }; else v.facingMode = 'environment';
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: v, audio: false }); }
+  catch (e) { if (deviceId) return startCamera(null); throw e; }
+  video.srcObject = stream; await video.play();
+  if (!video.videoWidth) await new Promise(r => video.onloadedmetadata = r);
+  return stream.getVideoTracks()[0].getSettings().deviceId;
+}
+function stopCamera() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null; }
+function dispSize(rot) { const w = video.videoWidth, h = video.videoHeight; return rot % 180 ? [h, w] : [w, h]; }
+function drawVideo(ctx, rot, mirror) {
+  const W = ctx.canvas.width, H = ctx.canvas.height, vw = video.videoWidth, vh = video.videoHeight;
+  ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(rot * Math.PI / 180); if (mirror) ctx.scale(-1, 1);
+  ctx.drawImage(video, -vw / 2, -vh / 2, vw, vh); ctx.restore();
+}
+function fit(cv, box) {
+  const r = Math.min(box.clientWidth / cv.width, box.clientHeight / cv.height), w = cv.width * r, h = cv.height * r;
+  Object.assign(cv.style, { width: w + 'px', height: h + 'px', left: (box.clientWidth - w) / 2 + 'px', top: (box.clientHeight - h) / 2 + 'px' });
+  cv._uis = r > 0 ? 1 / r : 1;   // canvas pixels per screen pixel, so text stays readable at any camera resolution
+}
+const toCanvas = (cv, e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+
+/* ================= calibration =================
+   Stored points are in display-canvas pixels (after rotate/mirror). */
+let CAL = store.get('bbar-cal', null);
+function deriveCal(c) {
+  const B = BOARDS[c.board], N = B.cols;
+  const H = homography([[0, 0], [N - 1, 0], [N - 1, 11], [0, 11]], [c.pts.j1, c.pts.jN, c.pts.aN, c.pts.a1]), Hi = inv3(H);
+  const G = defaultGeo(c.board, c.red);
+  if (c.pts.T1 && c.pts.Tn && c.pts.B1) {
+    const t1 = applyH(Hi, ...c.pts.T1), tn = applyH(Hi, ...c.pts.Tn), b1 = applyH(Hi, ...c.pts.B1), gaps = Math.floor((B.rail - 1) / 5);
+    G.uT = t1[0]; G.vT = (t1[1] + tn[1]) / 2; G.g = Math.max(0, Math.min(2, (tn[0] - t1[0] - (B.rail - 1)) / gaps));
+    G.uB = b1[0]; G.vB = b1[1];
+  }
+  return { H, G };
+}
+const TAPS = [
+  ['j1', 'Tap hole <b>j1</b>: row j, column 1 (corner of the main hole area)'],
+  ['jN', 'Tap hole <b>j{N}</b>: row j, last column'],
+  ['aN', 'Tap hole <b>a{N}</b>: row a, last column'],
+  ['a1', 'Tap hole <b>a1</b>: row a, column 1'],
+  ['T1', 'Power rail on the <b>row-j side</b>: tap the <b>first hole</b> (column-1 end) of the <b>outermost</b> rail row'],
+  ['Tn', 'Same rail row: tap its <b>last hole</b> (far end)'],
+  ['B1', 'Power rail on the <b>row-a side</b>: tap the <b>first hole</b> (column-1 end) of the <b>outermost</b> rail row'],
+];
+let calS = null, calRAF = 0;
+async function openCal() {
+  show('cal');
+  calS = { rot: CAL?.rot || 0, mirror: !!CAL?.mirror, board: CAL?.board || 'full', red: CAL?.red || 'out', pts: { ...(CAL?.pts || {}) }, drag: null, deviceId: CAL?.deviceId };
+  $('calBoard').value = calS.board; $('calRed').value = calS.red;
+  try { calS.deviceId = await startCamera(calS.deviceId); }
+  catch (e) { $('calMsg').innerHTML = `<b>No camera:</b> ${esc(e.message)}. Check a camera is connected and the page has permission.`; return; }
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  $('camSel').innerHTML = devs.map((d, i) => `<option value="${d.deviceId}" ${d.deviceId === calS.deviceId ? 'selected' : ''}>${esc(d.label || 'Camera ' + (i + 1))}</option>`).join('');
+  calSizeCanvas(false);
+  cancelAnimationFrame(calRAF); calLoop();
+}
+function calSizeCanvas(resetPts) {
+  const cv = $('calCv'), [w, h] = dispSize(calS.rot);
+  if (CAL && !resetPts && CAL.w && (CAL.w !== w || CAL.h !== h) && Object.keys(calS.pts).length) {   // camera resolution changed: rescale taps
+    const sx = w / CAL.w, sy = h / CAL.h; for (const k in calS.pts) calS.pts[k] = [calS.pts[k][0] * sx, calS.pts[k][1] * sy];
+  }
+  cv.width = w; cv.height = h; fit(cv, $('calStage'));
+  if (resetPts) calS.pts = {};
+}
+const nextTap = () => TAPS.find(([k]) => !calS.pts[k]);
+function calLoop() {
+  const cv = $('calCv'), ctx = cv.getContext('2d'), N = BOARDS[calS.board].cols, t = performance.now() / 1000;
+  if (video.videoWidth) drawVideo(ctx, calS.rot, calS.mirror);
+  const nt = nextTap(), k0 = cv.width / 90;
+  if (!nt) {
+    const c = deriveCal({ ...calS }), m = mapper(c.H);
+    drawGrid(ctx, m, c.G);
+    $('calMsg').innerHTML = `<b>Check the dots sit in every hole</b> (white = holes, red/blue = rails). Drag any handle to fine-tune, then <b>Save</b>.`;
+    $('calSave').disabled = false;
+  } else {
+    $('calMsg').innerHTML = `${TAPS.indexOf(nt) + 1}/7 · ${nt[1].replace('{N}', N)}<br><span style="color:#8a93a8;font-size:12px">Hold your finger down and drag: the zoom window helps you land exactly on the hole.</span>`;
+    $('calSave').disabled = true;
+  }
+  for (const [key] of TAPS) {
+    const p = calS.pts[key]; if (!p) continue;
+    ctx.save(); ctx.strokeStyle = calS.drag === key ? '#fff' : '#ffb020'; ctx.lineWidth = Math.max(2, k0 * .18);
+    ctx.beginPath(); ctx.arc(...p, k0 * .9, 0, 7); ctx.moveTo(p[0] - k0 * 1.6, p[1]); ctx.lineTo(p[0] - k0 * .4, p[1]); ctx.moveTo(p[0] + k0 * .4, p[1]); ctx.lineTo(p[0] + k0 * 1.6, p[1]);
+    ctx.moveTo(p[0], p[1] - k0 * 1.6); ctx.lineTo(p[0], p[1] - k0 * .4); ctx.moveTo(p[0], p[1] + k0 * .4); ctx.lineTo(p[0], p[1] + k0 * 1.6); ctx.stroke(); ctx.restore();
+    tag(ctx, p[0], p[1] - k0 * 2.4, key.replace('N', N).replace('T1', 'rail start').replace('Tn', 'rail end').replace('B1', 'rail start'), { fg: '#ffb020', size: Math.max(12, k0 * .9) });
+  }
+  if (calS.drag) drawLoupe(cv, calS.pts[calS.drag]);
+  calRAF = requestAnimationFrame(calLoop);
+}
+function drawLoupe(cv, p) {
+  const L = $('loupe'), lc = L.getContext('2d'), z = 4, s = L.width / z;
+  lc.imageSmoothingEnabled = false; lc.fillStyle = '#000'; lc.fillRect(0, 0, L.width, L.height);
+  lc.drawImage(cv, p[0] - s / 2, p[1] - s / 2, s, s, 0, 0, L.width, L.height);
+  lc.strokeStyle = '#3ddc84'; lc.lineWidth = 2; lc.beginPath(); lc.moveTo(L.width / 2, 0); lc.lineTo(L.width / 2, L.height); lc.moveTo(0, L.height / 2); lc.lineTo(L.width, L.height / 2); lc.stroke();
+  const r = cv.getBoundingClientRect(), stage = $('calStage').getBoundingClientRect(), px = (p[0] / cv.width) * r.width + r.left - stage.left;
+  L.style.left = px < stage.width / 2 ? 'auto' : '8px'; L.style.right = px < stage.width / 2 ? '8px' : 'auto';
+}
+$('calCv').addEventListener('pointerdown', e => {
+  if (!calS) return; const cv = $('calCv'), p = toCanvas(cv, e), k0 = cv.width / 90;
+  let best = null, bd = k0 * 2.5;
+  for (const key in calS.pts) { const d = Math.hypot(calS.pts[key][0] - p[0], calS.pts[key][1] - p[1]); if (d < bd) { bd = d; best = key; } }
+  if (!best) { const nt = nextTap(); if (!nt) return; best = nt[0]; calS.pts[best] = p; }
+  calS.drag = best; calS.off = [calS.pts[best][0] - p[0], calS.pts[best][1] - p[1]];
+  cv.setPointerCapture(e.pointerId); $('loupe').style.display = 'block';
+});
+$('calCv').addEventListener('pointermove', e => { if (!calS?.drag) return; const p = toCanvas($('calCv'), e); calS.pts[calS.drag] = [p[0] + calS.off[0], p[1] + calS.off[1]]; });
+const endDrag = () => { if (calS) calS.drag = null; $('loupe').style.display = 'none'; };
+$('calCv').addEventListener('pointerup', endDrag); $('calCv').addEventListener('pointercancel', endDrag);
+$('rotBtn').onclick = () => { calS.rot = (calS.rot + 90) % 360; calSizeCanvas(true); toast('Rotated: please re-tap the holes'); };
+$('mirBtn').onclick = () => { calS.mirror = !calS.mirror; calS.pts = {}; toast('Mirrored: please re-tap the holes'); };
+$('calRestart').onclick = () => { calS.pts = {}; };
+$('calBoard').onchange = e => { calS.board = e.target.value; calS.pts = {}; };
+$('calRed').onchange = e => { calS.red = e.target.value; };
+$('camSel').onchange = async e => { calS.deviceId = await startCamera(e.target.value); calSizeCanvas(true); };
+$('calSave').onclick = () => {
+  const [w, h] = dispSize(calS.rot);
+  CAL = { rot: calS.rot, mirror: calS.mirror, board: calS.board, red: calS.red, pts: calS.pts, deviceId: calS.deviceId, w, h, saved: Date.now() };
+  store.set('bbar-cal', CAL); toast('Calibration saved'); closeCal();
+};
+$('calExit').onclick = () => closeCal();
+function closeCal() { cancelAnimationFrame(calRAF); calS = null; stopCamera(); show('home'); renderHome(); }
+
+/* ================= library ================= */
+let SHARED = [], MINE = store.get('bbar-lib', []);
+const saveMine = () => store.set('bbar-lib', MINE);
+async function loadShared() {
+  try { const r = await fetch('library.json', { cache: 'no-store' }); const j = await r.json(); SHARED = (j.circuits || j).map(c => ({ ...c, shared: true })); }
+  catch { SHARED = []; }
+  renderHome();
+}
+function circuitItem(c, mine) {
+  return `<div class="item"><div class="meta"><div class="name">${esc(c.name)}</div><div class="sub">${c.steps.length} steps · ${BOARDS[c.board]?.name || c.board}${c.desc ? ' · ' + esc(c.desc) : ''}</div></div>
+    <button class="btn acc" data-a="run" data-id="${c.id}">▶ Run</button>
+    ${mine ? `<button class="btn" data-a="edit" data-id="${c.id}">✎</button><button class="btn" data-a="exp" data-id="${c.id}">⬇</button><button class="btn warn" data-a="del" data-id="${c.id}">🗑</button>`
+           : `<button class="btn" data-a="copy" data-id="${c.id}">⧉ Copy</button>`}</div>`;
+}
+function renderHome() {
+  const st = $('calStatus');
+  if (CAL) { st.className = 'note ok'; st.innerHTML = `✓ Camera calibrated for a <b>${BOARDS[CAL.board].name}</b> board (${new Date(CAL.saved).toLocaleDateString()}). Recalibrate if the camera or board is moved.`; }
+  else { st.className = 'note bad'; st.innerHTML = `Camera not set up yet: tap <b>📷 Camera setup</b>. Until then, circuits run on a drawn diagram instead of the live camera.`; }
+  $('sharedList').innerHTML = SHARED.length ? SHARED.map(c => circuitItem(c, false)).join('') : '<div class="empty">No shared library found.</div>';
+  $('myList').innerHTML = MINE.length ? MINE.map(c => circuitItem(c, true)).join('') : '<div class="empty">None yet. Tap <b>+ New circuit</b>, or Copy one from the shared library to modify it.</div>';
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-a][data-id]'); if (!b || !$('home').classList.contains('on')) return;
+  const id = b.dataset.id, c = MINE.find(x => x.id === id) || SHARED.find(x => x.id === id);
+  switch (b.dataset.a) {
+    case 'run': runCircuit(c, 'home'); break;
+    case 'edit': openEditor(structuredClone(c)); break;
+    case 'copy': { const n = { ...structuredClone(c), id: uid(), shared: undefined, name: c.name + ' (copy)' }; delete n.shared; MINE.push(n); saveMine(); renderHome(); toast('Copied to My circuits'); break; }
+    case 'del': if (confirm(`Delete "${c.name}"?`)) { MINE = MINE.filter(x => x.id !== id); saveMine(); renderHome(); } break;
+    case 'exp': download(`${c.name.replace(/[^\w-]+/g, '_')}.json`, { format: 'breadboard-ar', version: 1, circuits: [c] }); break;
+  }
+});
+function download(name, obj) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' })); a.download = name; a.click(); }
+$('expBtn').onclick = () => MINE.length ? download('breadboard-circuits.json', { format: 'breadboard-ar', version: 1, circuits: MINE }) : toast('No circuits of your own yet');
+$('impBtn').onclick = () => $('impFile').click();
+$('impFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text()), list = Array.isArray(j) ? j : j.circuits || [j];
+    let n = 0;
+    for (const c of list) { if (!c.steps || !c.board) continue; const ex = MINE.find(x => x.id === c.id); if (ex) Object.assign(ex, c); else MINE.push({ ...c, id: c.id || uid() }); n++; }
+    saveMine(); renderHome(); toast(`Imported ${n} circuit${n === 1 ? '' : 's'}`);
+  } catch (err) { toast('Import failed: ' + err.message); }
+};
+$('newBtn').onclick = () => openEditor({ id: uid(), name: 'New circuit', desc: '', board: CAL?.board || 'full', steps: [] });
+$('calBtn').onclick = openCal;
+
+/* ================= run ================= */
+let RUN = null;
+async function runCircuit(c, back) {
+  if (!c.steps.length) { toast('This circuit has no steps yet'); return; }
+  RUN = { c, back, cur: 0, grid: false, mode: 'diagram', raf: 0 };
+  show('run'); $('runName').textContent = c.name;
+  if (CAL) {
+    const maxCol = Math.max(...c.steps.flatMap(s => s.parts.flatMap(partHoles)).map(h => { const p = parseHole(h); return p.rail ? 0 : p.col; }), 0);
+    if (maxCol > BOARDS[CAL.board].cols) toast(`Heads up: this circuit uses column ${maxCol}, beyond the calibrated ${BOARDS[CAL.board].name} board`, 4500);
+    try { await startCamera(CAL.deviceId); RUN.mode = 'camera'; const d = deriveCal(CAL); RUN.m = mapper(d.H); RUN.G = d.G; }
+    catch (e) { toast('Camera unavailable, showing the diagram: ' + e.message, 4000); }
+  }
+  runSize(); runStep(0); runLoop();
+}
+function runSize() {
+  if (!RUN) return; const cv = $('runCv'), box = $('runStage');
+  if (RUN.mode === 'camera') {
+    const [w, h] = dispSize(CAL.rot);
+    if (CAL.w && (w !== CAL.w || h !== CAL.h)) { const sx = w / CAL.w, sy = h / CAL.h, pts = {}; for (const k in CAL.pts) pts[k] = [CAL.pts[k][0] * sx, CAL.pts[k][1] * sy]; const d = deriveCal({ ...CAL, pts }); RUN.m = mapper(d.H); RUN.G = d.G; }
+    cv.width = w; cv.height = h;
+  } else {
+    const G = defaultGeo(RUN.c.board, CAL?.red || 'out'), dpr = Math.min(2, devicePixelRatio || 1);
+    cv.width = box.clientWidth * dpr; cv.height = box.clientHeight * dpr;
+    RUN.G = G; RUN.m = diagramMapper(cv.width, cv.height, G);
+  }
+  fit(cv, box);
+}
+function diagramMapper(W, H, G) {
+  const N = BOARDS[G.board].cols, uw = N - 1 + 3.2, vh = (G.vB - G.vT) + 3.6, s = Math.min(W / uw, H / vh);
+  const ox = (W - (N - 1) * s) / 2, oy = (H - (G.vB + G.vT) * s) / 2;
+  return mapper([s, 0, ox, 0, s, oy, 0, 0, 1]);
+}
+function runStep(i) {
+  const st = RUN.c.steps; RUN.cur = Math.max(0, Math.min(st.length - 1, i));
+  const s = st[RUN.cur];
+  $('runNo').textContent = `Step ${RUN.cur + 1} of ${st.length}${RUN.mode === 'diagram' ? ' · diagram view' : ''}`;
+  $('runTitle').textContent = s.title; $('runText').innerHTML = s.text || '';
+  $('runBack').disabled = RUN.cur === 0;
+  $('runNext').textContent = RUN.cur === st.length - 1 ? 'Finish ✓' : 'Next ▶';
+}
+function runLoop() {
+  if (!RUN) return;
+  const cv = $('runCv'), ctx = cv.getContext('2d'), t = performance.now() / 1000;
+  if (RUN.mode === 'camera') { if (video.videoWidth) drawVideo(ctx, CAL.rot, CAL.mirror); }
+  else { ctx.fillStyle = '#10141e'; ctx.fillRect(0, 0, cv.width, cv.height); drawBoardDiagram(ctx, RUN.m, RUN.G); }
+  if (RUN.grid) drawGrid(ctx, RUN.m, RUN.G);
+  renderCircuit(ctx, RUN.m, RUN.G, RUN.c.steps, RUN.cur, t);
+  RUN.raf = requestAnimationFrame(runLoop);
+}
+function exitRun() { if (!RUN) return; cancelAnimationFrame(RUN.raf); stopCamera(); const b = RUN.back; RUN = null; if (b === 'edit') { show('edit'); edResize(); } else { show('home'); renderHome(); } }
+$('runNext').onclick = () => RUN.cur === RUN.c.steps.length - 1 ? exitRun() : runStep(RUN.cur + 1);
+$('runBack').onclick = () => runStep(RUN.cur - 1);
+$('runExit').onclick = exitRun;
+$('runGrid').onclick = () => { RUN.grid = !RUN.grid; $('runGrid').classList.toggle('sel', RUN.grid); };
+document.addEventListener('keydown', e => {
+  if (RUN && $('run').classList.contains('on')) {
+    if (['ArrowRight', ' ', 'Enter', 'PageDown'].includes(e.key)) { e.preventDefault(); $('runNext').click(); }
+    if (['ArrowLeft', 'Backspace', 'PageUp'].includes(e.key)) { e.preventDefault(); runStep(RUN.cur - 1); }
+    if (e.key === 'Escape') exitRun();
+  }
+});
+addEventListener('resize', () => { if (RUN) runSize(); if (calS) fit($('calCv'), $('calStage')); if (ED) edResize(); });
+
+/* ================= editor ================= */
+const TOOLS = [
+  ['wire', '〰 Wire', 2], ['res', '▭ Resistor', 2], ['led', '● LED', 2], ['diode', '▷| Diode', 2], ['cap', '⊣⊢ Capacitor', 2],
+  ['btn', '⊡ Button', 1], ['ic', '▬ Chip', 1], ['lead', '⚡ Supply', 1], ['probe', '⊸ Probe', 1], ['note', '✎ Text step', 0],
+];
+const TOOLPROMPT = {
+  wire: ['Tap the first end', 'Tap the other end'], res: ['Tap one leg', 'Tap the other leg'], led: ['Tap the + hole (long leg)', 'Tap the − hole (short leg)'],
+  diode: ['Tap the anode (no stripe) hole', 'Tap the cathode (stripe) hole'], cap: ['Tap the first leg (+ if electrolytic)', 'Tap the second leg (−)'],
+  btn: ['Tap the hole for the button\'s left leg in row e or f'], ic: ['Tap the hole for pin 1 (row e, leftmost pin)'],
+  lead: ['Tap the rail hole the supply lead goes into'], probe: ['Tap the hole to measure'],
+};
+let ED = null;
+const edOpts = { color: 'red', ohms: '220', led: 'red', capLabel: '100 µF', pol: true, pins: 8, icLabel: 'NE555', leadPol: '+', leadLabel: '+5 V', probeColor: 'red', probeLabel: 'V' };
+function openEditor(c) {
+  ED = { c, sel: Math.max(0, c.steps.length - 1), tool: null, picks: [], dirty: false, hover: null };
+  show('edit'); $('edName').value = c.name; $('edBoard').value = c.board;
+  $('tools').innerHTML = TOOLS.map(([k, n]) => `<button class="btn" data-tool="${k}">${n}</button>`).join('');
+  setTool(null); renderSteps(); edResize();
+  cancelAnimationFrame(ED.raf); edLoop();
+}
+function edResize() {
+  if (!ED) return; const cv = $('edCv'), box = $('edStage'), dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.max(10, box.clientWidth * dpr); cv.height = Math.max(10, box.clientHeight * dpr); fit(cv, box);
+  ED.G = defaultGeo(ED.c.board, CAL?.red || 'out'); ED.m = diagramMapper(cv.width, cv.height, ED.G);
+}
+function edLoop() {
+  if (!ED || !$('edit').classList.contains('on')) { if (ED) ED.raf = requestAnimationFrame(edLoop); return; }
+  const cv = $('edCv'), ctx = cv.getContext('2d'), t = performance.now() / 1000, steps = ED.c.steps;
+  ctx.fillStyle = '#10141e'; ctx.fillRect(0, 0, cv.width, cv.height);
+  drawBoardDiagram(ctx, ED.m, ED.G, occupied());
+  if (steps.length) renderCircuit(ctx, ED.m, ED.G, steps, Math.min(ED.sel, steps.length - 1), t, { allFuture: true });
+  ED.picks.forEach(h => { const [u, v] = holeUV(h, ED.G), A = ED.m(u, v), k = ED.m.k(u, v); dot(ctx, ...A, k * .55, null, '#ffb020'); ctx.lineWidth = 3; });
+  if (ED.hover) { const [u, v] = holeUV(ED.hover, ED.G), A = ED.m(u, v), k = ED.m.k(u, v); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(...A, k * .6, 0, 7); ctx.stroke(); }
+  ED.raf = requestAnimationFrame(edLoop);
+}
+function occupied(exceptStep = -1) {
+  const s = new Set(); ED.c.steps.forEach((st, i) => { if (i !== exceptStep) st.parts.forEach(p => partHoles(p).forEach(h => s.add(h))); }); return s;
+}
+function nearestHole(p) {
+  let best = null, bd = Infinity;
+  for (const id of allHoles(ED.c.board)) { const A = ED.m(...holeUV(id, ED.G)), d = Math.hypot(A[0] - p[0], A[1] - p[1]); if (d < bd) { bd = d; best = id; } }
+  return bd < ED.m.k(0, 5) * .7 ? best : null;
+}
+function setTool(k) {
+  ED.tool = k; ED.picks = [];
+  document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('sel', b.dataset.tool === k));
+  const o = $('toolOpts'), sel = (id, opts, val) => `<select id="${id}">${opts.map(x => `<option ${x === val ? 'selected' : ''}>${x}</option>`).join('')}</select>`;
+  o.innerHTML = {
+    wire: `Colour ${sel('oColor', Object.keys(WIRE), edOpts.color)}`,
+    res: `Value <input id="oOhms" size="7" value="${esc(edOpts.ohms)}"> <span id="oBands"></span>`,
+    led: `Colour ${sel('oLed', Object.keys(LEDC), edOpts.led)}`,
+    cap: `Value <input id="oCap" size="8" value="${esc(edOpts.capLabel)}"> <label><input type="checkbox" id="oPol" ${edOpts.pol ? 'checked' : ''}> Electrolytic (polarised)</label>`,
+    ic: `Pins ${sel('oPins', ['8', '14', '16', '18', '20', '28'], String(edOpts.pins))} Name <input id="oIc" size="8" value="${esc(edOpts.icLabel)}">`,
+    lead: `Lead ${sel('oLeadPol', ['+', '−'], edOpts.leadPol)} Label <input id="oLead" size="7" value="${esc(edOpts.leadLabel)}">`,
+    probe: `Probe ${sel('oProbeC', ['red', 'black'], edOpts.probeColor)} Label <input id="oProbe" size="8" value="${esc(edOpts.probeLabel)}">`,
+  }[k] || '';
+  const bind = (id, key, f = x => x) => { const el = $(id); if (el) el.oninput = el.onchange = () => { edOpts[key] = f(el.type === 'checkbox' ? el.checked : el.value); if (id === 'oOhms') showBands(); }; };
+  bind('oColor', 'color'); bind('oOhms', 'ohms'); bind('oLed', 'led'); bind('oCap', 'capLabel'); bind('oPol', 'pol'); bind('oPins', 'pins', Number); bind('oIc', 'icLabel');
+  bind('oLeadPol', 'leadPol'); bind('oLead', 'leadLabel'); bind('oProbeC', 'probeColor'); bind('oProbe', 'probeLabel');
+  if (k === 'res') showBands();
+  edHint();
+}
+function showBands() { const r = parseR(edOpts.ohms), el = $('oBands'); if (el) el.innerHTML = isFinite(r) ? `${bandHTML(r)} ${bandNames(r)}` : '<span style="color:#ff8080">e.g. 220, 4.7k, 1M</span>'; }
+function edHint() {
+  const h = $('edHint');
+  if (ED.tool) h.innerHTML = `<b style="color:#3ddc84">${TOOLS.find(t => t[0] === ED.tool)[1]}</b>: ${TOOLPROMPT[ED.tool][ED.picks.length]}${ED.hover ? ` · <b>${holeName(ED.hover)}</b>` : ''}`;
+  else h.innerHTML = ED.c.steps.length ? `Pick a part above to add a step${ED.hover ? ` · <b>${holeName(ED.hover)}</b>` : ''}` : 'Pick a part above, then tap holes on the board. Each part becomes one step.';
+}
+$('tools').addEventListener('click', e => {
+  const b = e.target.closest('[data-tool]'); if (!b) return;
+  const k = b.dataset.tool;
+  if (k === 'note') { addStep({ title: 'Power on', text: 'Switch the supply on.', parts: [], power: 'on' }); openStepModal(ED.sel); setTool(null); return; }
+  setTool(ED.tool === k ? null : k);
+});
+$('edCv').addEventListener('pointermove', e => { if (!ED) return; ED.hover = nearestHole(toCanvas($('edCv'), e)); edHint(); });
+$('edCv').addEventListener('pointerleave', () => { if (ED) { ED.hover = null; edHint(); } });
+$('edCv').addEventListener('pointerdown', e => {
+  if (!ED) return; const id = nearestHole(toCanvas($('edCv'), e)); ED.hover = id;
+  if (!id) return;
+  if (!ED.tool) { const i = ED.c.steps.findIndex(s => s.parts.some(p => partHoles(p).includes(id))); if (i >= 0) { ED.sel = i; renderSteps(); } edHint(); return; }
+  let hole = id; const h = parseHole(id), N = BOARDS[ED.c.board].cols;
+  if (ED.tool === 'lead' && !h.rail) return toast('Supply leads go into a power rail hole');
+  if (ED.tool === 'btn' || ED.tool === 'ic') {
+    if (h.rail) return toast('Place this across the centre gap, not on a rail');
+    const span = ED.tool === 'btn' ? 2 : edOpts.pins / 2 - 1;
+    if (h.col + span > N) return toast('Not enough columns to the right');
+    hole = `e${h.col}`;
+  }
+  if (ED.picks.includes(hole)) return;
+  ED.picks.push(hole);
+  if (ED.picks.length >= TOOLS.find(t => t[0] === ED.tool)[2]) commitPart();
+  edHint();
+});
+function commitPart() {
+  const [a, b] = ED.picks, o = edOpts; let p;
+  switch (ED.tool) {
+    case 'wire': p = { k: 'wire', a, b, color: o.color }; break;
+    case 'res': { const r = parseR(o.ohms); if (!isFinite(r)) { toast('Enter a resistor value like 220, 4.7k or 1M'); ED.picks = []; return; } p = { k: 'res', a, b, ohms: r }; break; }
+    case 'led': p = { k: 'led', a, b, color: o.led }; break;
+    case 'diode': p = { k: 'diode', a, b }; break;
+    case 'cap': p = { k: 'cap', a, b, label: o.capLabel, pol: !!o.pol }; break;
+    case 'btn': p = { k: 'btn', at: a }; break;
+    case 'ic': p = { k: 'ic', at: a, pins: o.pins, label: o.icLabel }; break;
+    case 'lead': { const h = parseHole(a); p = { k: 'lead', to: `${h.top ? 'T' : 'B'}${o.leadPol === '+' ? '+' : '-'}${h.i}`, color: o.leadPol === '+' ? 'red' : 'black', label: o.leadLabel }; break; }
+    case 'probe': p = { k: 'probe', at: a, color: o.probeColor, label: o.probeLabel }; break;
+  }
+  ED.picks = [];
+  const occ = occupied(), clash = partHoles(p).filter(h => occ.has(h));
+  if (clash.length) { toast(`${clash.join(', ')} already used by another step`); return; }
+  const bad = partHoles(p).filter(h => !validHole(h, ED.c.board));
+  if (bad.length) { toast(`${bad.join(', ')} is off the board`); return; }
+  addStep({ ...autoStep(p), parts: [p] });
+}
+function addStep(s) { ED.c.steps.splice(ED.sel + 1, 0, s); ED.sel = Math.min(ED.sel + 1, ED.c.steps.length - 1); if (ED.c.steps.length === 1) ED.sel = 0; ED.dirty = true; renderSteps(); }
+function renderSteps() {
+  const el = $('edSteps'), st = ED.c.steps;
+  el.innerHTML = st.length ? st.map((s, i) => `<div class="stp ${i === ED.sel ? 'cur' : ''}" data-i="${i}"><span class="n">${i + 1}</span><span class="t">${esc(s.title)}${s.power ? ` <span style="color:#ffb020">⚡${s.power}</span>` : ''}</span><button class="btn" data-ed="${i}">✎</button></div>`).join('')
+    : '<div class="empty">No steps yet.</div>';
+  el.querySelector('.cur')?.scrollIntoView({ block: 'nearest' });
+}
+$('edSteps').addEventListener('click', e => {
+  const ed = e.target.closest('[data-ed]'); if (ed) { ED.sel = +ed.dataset.ed; renderSteps(); openStepModal(ED.sel); return; }
+  const row = e.target.closest('[data-i]'); if (row) { ED.sel = +row.dataset.i; renderSteps(); }
+});
+function openStepModal(i) {
+  const s = ED.c.steps[i];
+  $('mbox').innerHTML = `<b>Step ${i + 1}</b>
+    <input id="mTitle" value="${esc(s.title)}" placeholder="Title shown in big text">
+    <textarea id="mText" placeholder="Extra instructions (optional)">${esc(s.text || '')}</textarea>
+    <select id="mPower"><option value="">Power: no change</option><option value="on" ${s.power === 'on' ? 'selected' : ''}>Power ON (LEDs light)</option><option value="press" ${s.power === 'press' ? 'selected' : ''}>LEDs light while button pressed</option><option value="off" ${s.power === 'off' ? 'selected' : ''}>Power OFF</option></select>
+    <div class="row"><button class="btn" id="mUp">▲</button><button class="btn" id="mDown">▼</button><button class="btn warn" id="mDel">Delete</button><span style="flex:1"></span><button class="btn acc" id="mOk">Done</button></div>`;
+  $('modal').classList.add('on');
+  const close = () => { $('modal').classList.remove('on'); renderSteps(); };
+  const move = d => { const j = ED.sel + d; if (j < 0 || j >= ED.c.steps.length) return; const st = ED.c.steps; [st[ED.sel], st[j]] = [st[j], st[ED.sel]]; ED.sel = j; ED.dirty = true; renderSteps(); };
+  $('mOk').onclick = () => { s.title = $('mTitle').value.trim() || s.title; s.text = $('mText').value; const pw = $('mPower').value; if (pw) s.power = pw; else delete s.power; ED.dirty = true; close(); };
+  $('mDel').onclick = () => { ED.c.steps.splice(ED.sel, 1); ED.sel = Math.max(0, ED.sel - 1); ED.dirty = true; close(); };
+  $('mUp').onclick = () => move(-1); $('mDown').onclick = () => move(1);
+}
+$('modal').addEventListener('click', e => { if (e.target.id === 'modal') $('modal').classList.remove('on'); });
+$('edName').oninput = e => { ED.c.name = e.target.value; ED.dirty = true; };
+$('edBoard').onchange = e => {
+  const nb = e.target.value, bad = ED.c.steps.flatMap(s => s.parts.flatMap(partHoles)).filter(h => !validHole(h, nb));
+  if (bad.length) { toast(`Can't switch: ${bad.length} hole(s) would be off a ${BOARDS[nb].name} board`); e.target.value = ED.c.board; return; }
+  ED.c.board = nb; ED.dirty = true; edResize();
+};
+$('edInfo').onclick = () => {
+  $('mbox').innerHTML = `<b>Circuit description</b><textarea id="mDesc" placeholder="What students will learn">${esc(ED.c.desc || '')}</textarea><div class="row"><span style="flex:1"></span><button class="btn acc" id="mOk">Done</button></div>`;
+  $('modal').classList.add('on'); $('mOk').onclick = () => { ED.c.desc = $('mDesc').value; ED.dirty = true; $('modal').classList.remove('on'); };
+};
+function saveEditor() {
+  ED.c.name = ED.c.name.trim() || 'Untitled circuit'; ED.c.updated = Date.now();
+  const i = MINE.findIndex(x => x.id === ED.c.id); if (i >= 0) MINE[i] = structuredClone(ED.c); else MINE.push(structuredClone(ED.c));
+  saveMine(); ED.dirty = false; toast('Saved');
+}
+$('edSave').onclick = saveEditor;
+$('edTry').onclick = () => { if (!ED.c.steps.length) return toast('Add some steps first'); runCircuit(structuredClone(ED.c), 'edit'); };
+$('edExit').onclick = () => { if (ED.dirty && !confirm('Leave without saving?')) return; cancelAnimationFrame(ED.raf); ED = null; show('home'); renderHome(); };
+
+renderHome(); loadShared();
+</script>
+</body>
+</html>

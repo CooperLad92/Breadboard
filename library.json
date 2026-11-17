@@ -1,0 +1,54 @@
+{
+  "format": "breadboard-ar",
+  "version": 1,
+  "circuits": [
+    {
+      "id": "shared-led",
+      "name": "1 · LED + resistor",
+      "desc": "First circuit: light an LED safely with a current-limiting resistor (5 V).",
+      "board": "full",
+      "steps": [
+        { "title": "Connect the 5 V supply", "text": "Red lead to the top <b>+</b> rail, black lead to the top <b>−</b> rail. Leave the power <b>off</b> for now.",
+          "parts": [ { "k": "lead", "to": "T+1", "color": "red", "label": "+5 V" }, { "k": "lead", "to": "T-1", "color": "black", "label": "0 V" } ] },
+        { "title": "Red jumper: + rail → j8", "text": "Brings the supply down into column 8.", "parts": [ { "k": "wire", "a": "T+6", "b": "j8", "color": "red" } ] },
+        { "title": "220 Ω resistor: i8 → i14", "text": "Bands: <b>red-red-brown-gold</b>. Limits the LED current to about 14 mA. Either way round is fine.", "parts": [ { "k": "res", "a": "i8", "b": "i14", "ohms": 220 } ] },
+        { "title": "Red LED: + in h14, − in h15", "text": "<b>Long leg</b> (anode, +) into h14. <b>Short leg / flat edge</b> (cathode, −) into h15.", "parts": [ { "k": "led", "a": "h14", "b": "h15", "color": "red" } ] },
+        { "title": "Black jumper: j15 → − rail", "text": "Completes the loop back to 0 V.", "parts": [ { "k": "wire", "a": "j15", "b": "T-12", "color": "black" } ] },
+        { "title": "Power on", "text": "The LED should light. If it doesn't, check the LED is the right way round: it only conducts one way.", "parts": [], "power": "on" }
+      ]
+    },
+    {
+      "id": "shared-button",
+      "name": "2 · Push-button LED",
+      "desc": "Use a push button to switch an LED, crossing the centre gap (5 V).",
+      "board": "full",
+      "steps": [
+        { "title": "Connect the 5 V supply", "text": "Red lead to the top <b>+</b> rail, black lead to the top <b>−</b> rail. Leave the power <b>off</b>.",
+          "parts": [ { "k": "lead", "to": "T+1", "color": "red", "label": "+5 V" }, { "k": "lead", "to": "T-1", "color": "black", "label": "0 V" } ] },
+        { "title": "Black jumper: link the − rails", "text": "Top − rail to bottom − rail, so both halves of the board share 0 V.", "parts": [ { "k": "wire", "a": "T-3", "b": "B-3", "color": "black" } ] },
+        { "title": "Push button across the centre gap", "text": "Legs in <b>e10, e12, f10, f12</b>. If the LED later stays on without pressing, rotate the button 90°.", "parts": [ { "k": "btn", "at": "e10" } ] },
+        { "title": "Red jumper: + rail → j10", "text": "Feeds the supply into one side of the button.", "parts": [ { "k": "wire", "a": "T+8", "b": "j10", "color": "red" } ] },
+        { "title": "220 Ω resistor: b12 → b18", "text": "Bands: <b>red-red-brown-gold</b>. Takes power from the other side of the button.", "parts": [ { "k": "res", "a": "b12", "b": "b18", "ohms": 220 } ] },
+        { "title": "Red LED: + in d18, − in d19", "text": "<b>Long leg</b> (anode, +) into d18. <b>Short leg / flat edge</b> (cathode, −) into d19.", "parts": [ { "k": "led", "a": "d18", "b": "d19", "color": "red" } ] },
+        { "title": "Black jumper: a19 → bottom − rail", "text": "Completes the loop back to 0 V.", "parts": [ { "k": "wire", "a": "a19", "b": "B-16", "color": "black" } ] },
+        { "title": "Power on and press the button", "text": "The LED should light only while the button is held down.", "parts": [], "power": "press" }
+      ]
+    },
+    {
+      "id": "shared-divider",
+      "name": "3 · Voltage divider",
+      "desc": "Two equal resistors halve the supply voltage. Measure it with a multimeter (5 V).",
+      "board": "full",
+      "steps": [
+        { "title": "Connect the 5 V supply", "text": "Red lead to the top <b>+</b> rail, black lead to the top <b>−</b> rail. Leave the power <b>off</b>.",
+          "parts": [ { "k": "lead", "to": "T+1", "color": "red", "label": "+5 V" }, { "k": "lead", "to": "T-1", "color": "black", "label": "0 V" } ] },
+        { "title": "Red jumper: + rail → j8", "text": "Brings the supply down into column 8.", "parts": [ { "k": "wire", "a": "T+6", "b": "j8", "color": "red" } ] },
+        { "title": "10 kΩ resistor (R1): i8 → i14", "text": "Bands: <b>brown-black-orange-gold</b>. The top half of the divider.", "parts": [ { "k": "res", "a": "i8", "b": "i14", "ohms": 10000 } ] },
+        { "title": "10 kΩ resistor (R2): h14 → h20", "text": "Bands: <b>brown-black-orange-gold</b>. The bottom half. Column 14 is now the midpoint.", "parts": [ { "k": "res", "a": "h14", "b": "h20", "ohms": 10000 } ] },
+        { "title": "Black jumper: j20 → − rail", "text": "Closes the divider to 0 V.", "parts": [ { "k": "wire", "a": "j20", "b": "T-17", "color": "black" } ] },
+        { "title": "Power on and measure Vout", "text": "Multimeter on DC volts: red probe on <b>g14</b>, black probe on the − rail. Expect about <b>2.5 V</b>, half of 5 V.",
+          "parts": [ { "k": "probe", "at": "g14", "color": "red", "label": "≈ 2.5 V" }, { "k": "probe", "at": "T-20", "color": "black", "label": "COM" } ], "power": "on" }
+      ]
+    }
+  ]
+}
